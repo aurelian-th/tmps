@@ -32,12 +32,71 @@ The primary objective of this laboratory work is to implement a domain model fol
 * `ConsoleAlertDispatcher`: formats and outputs violation alerts to the standard output.
 
 ### B. Open/closed principle (OCP)
-* Rule evaluation is abstracted behind the `TrackingRule` interface.
-* Specific rules, such as `SpeedLimitRule`, implement this interface. Additional business constraints (e.g. geofencing or battery thresholds) can be introduced by creating new `TrackingRule` implementations without altering `FleetTrackingService`.
+Rule evaluation is abstracted behind the `TrackingRule` contract. Adding new validation logic (e.g. geofencing or battery thresholds) only requires a new implementation without modifying existing evaluation flows:
+
+```java
+public interface TrackingRule {
+    boolean isViolated(TelemetryPing ping);
+
+    String getViolationMessage();
+}
+
+public final class SpeedLimitRule implements TrackingRule {
+    private final double maxSpeedKmh;
+
+    public SpeedLimitRule(double maxSpeedKmh) {
+        if (maxSpeedKmh <= 0) {
+            throw new IllegalArgumentException("Speed limit must be strictly positive");
+        }
+        this.maxSpeedKmh = maxSpeedKmh;
+    }
+
+    @Override
+    public boolean isViolated(TelemetryPing ping) {
+        return ping.speedKmh() > maxSpeedKmh;
+    }
+
+    @Override
+    public String getViolationMessage() {
+        return "Speed limit exceeded (" + maxSpeedKmh + " km/h allowed)";
+    }
+}
+```
 
 ### C. Dependency inversion principle (DIP)
-* High-level business logic in `FleetTrackingService` depends on domain abstractions (`VehicleRepository`, `AlertDispatcherPort`, `TrackingRule`) rather than concrete classes.
-* Concrete implementations (`InMemoryVehicleRepository`, `ConsoleAlertDispatcher`) are injected into the service at runtime.
+`FleetTrackingService` depends exclusively on abstractions injected at runtime (`VehicleRepository`, `AlertDispatcherPort`, and `TrackingRule`) rather than concrete data access or logging mechanisms:
+
+```java
+public final class FleetTrackingService {
+    private final VehicleRepository vehicleRepository;
+    private final AlertDispatcherPort alertDispatcher;
+    private final List<TrackingRule> rules;
+
+    public FleetTrackingService(
+            VehicleRepository vehicleRepository,
+            AlertDispatcherPort alertDispatcher,
+            List<TrackingRule> rules) {
+        this.vehicleRepository = Objects.requireNonNull(vehicleRepository);
+        this.alertDispatcher = Objects.requireNonNull(alertDispatcher);
+        this.rules = List.copyOf(rules);
+    }
+
+    public void processTelemetry(TelemetryPing ping) {
+        var vehicle = vehicleRepository.findById(ping.vehicleId())
+                .orElseThrow(() -> new IllegalArgumentException("Unknown vehicle with ID: " + ping.vehicleId()));
+
+        for (var rule : rules) {
+            if (rule.isViolated(ping)) {
+                var message = "[%s - %s] %s".formatted(
+                        vehicle.type(),
+                        vehicle.licensePlate(),
+                        rule.getViolationMessage());
+                alertDispatcher.dispatchAlert(ping, message);
+            }
+        }
+    }
+}
+```
 
 ---
 
