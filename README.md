@@ -9,7 +9,7 @@ This repository contains laboratory assignments and implementations for the Soft
 
 ## Laboratory works
 
-- **Lab 1:** SOLID principles in software architecture (ManaCar fleet telemetry platform).
-- **Lab 2:** Creational design patterns.
-- **Lab 3:** Structural design patterns.
-- **Lab 4:** Behavioral design patterns.
+- **Lab 0:** SOLID principles in software architecture (ManaCar fleet telemetry platform).
+- **Lab 1:** Creational design patterns.
+- **Lab 2:** Structural design patterns.
+- **Lab 3:** Behavioral design patterns.
