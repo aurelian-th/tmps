@@ -1,9 +1,5 @@
 package client;
 
-import domain.factory.CargoVanFactory;
-import domain.factory.PassengerCarFactory;
-import domain.factory.ScooterFactory;
-import domain.factory.VehicleFactory;
 import domain.models.TelemetryPing;
 import domain.models.Vehicle;
 import domain.models.VehicleType;
@@ -12,23 +8,16 @@ import domain.service.FleetConfigManager;
 import domain.service.FleetTrackingService;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Scanner;
 import java.util.UUID;
 
 public final class FleetConsoleTui {
     private final VehicleRepository repository;
     private final FleetTrackingService trackingService;
-    private final Map<String, VehicleFactory> factories;
 
     public FleetConsoleTui(VehicleRepository repository, FleetTrackingService trackingService) {
         this.repository = repository;
         this.trackingService = trackingService;
-        this.factories = Map.of(
-                "scooter", new ScooterFactory(),
-                "car", new PassengerCarFactory(),
-                "van", new CargoVanFactory()
-        );
     }
 
     public void run(Scanner scanner) {
@@ -41,15 +30,14 @@ public final class FleetConsoleTui {
             }
             var choice = scanner.nextLine().strip();
             switch (choice) {
-                case "1" -> handleFactoryMethod(scanner);
-                case "2" -> handleBuilder(scanner);
-                case "3" -> handlePrototype(scanner);
-                case "4" -> handleListVehicles();
-                case "5" -> handleTelemetryPing(scanner);
-                case "6" -> handleRemoveVehicle(scanner);
-                case "7" -> handleShowConfig();
+                case "1" -> handleBuilder(scanner);
+                case "2" -> handlePrototype(scanner);
+                case "3" -> handleListVehicles();
+                case "4" -> handleTelemetryPing(scanner);
+                case "5" -> handleRemoveVehicle(scanner);
+                case "6" -> handleShowConfig();
                 case "0", "exit", "quit" -> running = false;
-                default -> System.out.println("Invalid command. Enter a number between 0 and 7.");
+                default -> System.out.println("Invalid command. Enter a number between 0 and 6.");
             }
             System.out.println();
         }
@@ -58,37 +46,13 @@ public final class FleetConsoleTui {
 
     private void printMenu() {
         System.out.println("ManaCar Fleet Telemetry Management");
-        System.out.println("1. Create vehicle using Factory Method");
-        System.out.println("2. Build custom vehicle using Builder");
-        System.out.println("3. Clone vehicle template using Prototype");
-        System.out.println("4. List registered fleet vehicles");
-        System.out.println("5. Ingest telemetry ping");
-        System.out.println("6. Remove vehicle");
-        System.out.println("7. Inspect system configuration (Singleton)");
+        System.out.println("1. Build custom vehicle (Builder)");
+        System.out.println("2. Clone vehicle from template (Prototype)");
+        System.out.println("3. List registered fleet vehicles");
+        System.out.println("4. Ingest telemetry ping");
+        System.out.println("5. Remove vehicle");
+        System.out.println("6. Inspect system configuration (Singleton)");
         System.out.println("0. Exit");
-    }
-
-    private void handleFactoryMethod(Scanner scanner) {
-        System.out.print("Select factory type (scooter / car / van): ");
-        if (!scanner.hasNextLine()) return;
-        var typeKey = scanner.nextLine().strip().toLowerCase();
-        var factory = factories.get(typeKey);
-        if (factory == null) {
-            System.out.println("Unknown factory type. Options are: scooter, car, van.");
-            return;
-        }
-
-        System.out.print("Enter license plate: ");
-        if (!scanner.hasNextLine()) return;
-        var plate = scanner.nextLine().strip();
-        if (plate.isBlank()) {
-            System.out.println("License plate cannot be blank.");
-            return;
-        }
-
-        var vehicle = factory.createVehicle(plate);
-        repository.registerVehicle(vehicle);
-        System.out.println("Registered via " + factory.getClass().getSimpleName() + ": " + vehicle);
     }
 
     private void handleBuilder(Scanner scanner) {

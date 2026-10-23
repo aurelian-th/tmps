@@ -8,7 +8,6 @@
 ## Topic: Creational Design Patterns
 **Course:** Tehnici de Modelare și Programare Software (TMPS)  
 **Author:** Tihon Aurelian-Mihai, FAF-241  
-**Supervisor:** Drumea Vasile  
 
 ---
 
@@ -17,17 +16,16 @@
 ### Objectives
 1. Study and analyze the architectural motivations and trade-offs behind Creational Design Patterns.
 2. Formulate appropriate object instantiation mechanisms within an object-oriented domain.
-3. Implement at least three creational patterns within a cohesive, scalable software platform without third-party frameworks.
-4. Establish clean architectural separation across domain, factory, model, repository, and client packages.
+3. Implement three distinct creational patterns within a cohesive, scalable software platform without third-party frameworks.
+4. Establish clean architectural separation across domain, model, repository, and client packages.
 
 ### Theoretical background
-Creational design patterns address the inherent pitfalls of direct object instantiation using the `new` operator. Uncontrolled constructor calls scatter concrete dependencies throughout an application, causing high coupling, fragile maintenance, and code duplication. Creational patterns decouple client modules from concrete instantiation mechanics by controlling how objects are composed, configured, and managed throughout their lifecycle.
+Creational design patterns manage object creation mechanics, aiming to instantiate objects in a manner best suited to the situation while abstracting instantiation details away from client logic. Direct instantiation via the `new` operator frequently scatters concrete dependencies across the codebase, resulting in tight coupling, inflexible extension points, and code duplication.
 
-Key creational patterns analyzed and implemented in this laboratory include:
-* **Factory Method:** Defines an interface for creating objects, allowing concrete subclasses or implementing classes to decide which specific parameters and configurations to instantiate.
+Rather than introducing heavyweight factory hierarchies that add unwarranted indirection in focused domains, three complementary creational patterns were selected:
 * **Builder:** Separates the construction of complex objects from their structural representation, enabling step-by-step assembly with invariant enforcement and avoiding telescoping constructors.
-* **Singleton:** Guarantees that a class possesses only one instance across the entire runtime environment, offering a global, thread-safe access point without public mutable global state.
 * **Prototype:** Enables creating new objects by cloning an existing prototype instance, eliminating the overhead of repeated configuration when provisioning batches of similar entities.
+* **Singleton:** Guarantees that a class possesses only one instance across the entire runtime environment, offering a global, thread-safe access point without public mutable global state.
 
 ---
 
@@ -36,15 +34,13 @@ Key creational patterns analyzed and implemented in this laboratory include:
 Building directly upon the foundation established in **Lab 0 (SOLID Principles)**, the **ManaCar** fleet telemetry platform has been extended into a modular vehicle provisioning and tracking architecture.
 
 ManaCar tracks municipal scooters, passenger cars, and commercial cargo vans. As fleet sizes scale, vehicle creation cannot remain hardcoded in driver routines. The system requires:
-1. Standardized presets for standard vehicle classes (handled via **Factory Method**).
-2. Custom bespoke configurations with specific speed governors, payload thresholds, and battery capacities (handled via **Builder**).
-3. Rapid fleet replication from archetype vehicles (handled via **Prototype**).
-4. Centralized, immutable runtime parameters such as speed tolerances and regional coordinates (handled via **Singleton**).
+1. Custom configurations with specific speed governors, payload thresholds, and battery capacities (handled via **Builder**).
+2. Rapid fleet replication from archetype template vehicles (handled via **Prototype**).
+3. Centralized, immutable runtime parameters such as speed tolerances and regional coordinates (handled via **Singleton**).
 
 ### Package organization
 Following the modular structure guidelines, the project is structured as follows:
 * `client`: Console user interface (`FleetConsoleTui`), system entrypoint (`Main`), and test suite (`FleetCreationalTest`).
-* `domain.factory`: Factory interfaces and concrete implementations (`VehicleFactory`, `ScooterFactory`, `PassengerCarFactory`, `CargoVanFactory`).
 * `domain.models`: Domain models and immutable records (`Vehicle`, `VehicleBuilder`, `VehicleType`, `TelemetryPing`, `Prototype`).
 * `domain.repository`: Storage contracts and memory-backed thread-safe implementations (`VehicleRepository`, `InMemoryVehicleRepository`).
 * `domain.service`: Tracking services, policy rules, and system configuration (`FleetConfigManager`, `FleetTrackingService`, `SpeedLimitRule`, `ConsoleAlertDispatcher`).
@@ -53,81 +49,13 @@ Following the modular structure guidelines, the project is structured as follows
 
 ## 3. Creational design patterns implementation
 
-### A. Factory Method pattern
+### A. Builder pattern
 
 #### Problem and rationale
-Different vehicle categories require distinct domain defaults: electric scooters have strict 25.0 km/h municipal speed limits and light payload ratings; cargo vans require heavy freight payload limits and 90.0 km/h commercial limits. Directly embedding these numerical constants across application logic violates the Single Responsibility Principle and couples the client to vehicle internals.
+A `Vehicle` in ManaCar requires several configuration attributes: identifier, license plate, vehicle type, maximum governed speed, payload capacity, and battery kilowatt-hour capacity. Relying on telescoping constructors creates error-prone call sites, where adjacent numeric arguments (such as speed versus payload) can be accidentally transposed. Furthermore, creating separate sub-classes or specialized factory hierarchies for every minor permutation leads to class explosion without real benefit.
 
 #### Solution
-The `VehicleFactory` interface establishes the creation contract, with concrete factories (`ScooterFactory`, `PassengerCarFactory`, `CargoVanFactory`) encapsulating specific parameter defaults:
-
-```java
-package domain.factory;
-
-import domain.models.Vehicle;
-
-public interface VehicleFactory {
-    Vehicle createVehicle(String licensePlate);
-}
-
-public final class ScooterFactory implements VehicleFactory {
-    @Override
-    public Vehicle createVehicle(String licensePlate) {
-        return Vehicle.builder()
-                .licensePlate(licensePlate)
-                .type(VehicleType.SCOOTER)
-                .maxSpeedKmh(25.0)
-                .payloadCapacityKg(15.0)
-                .batteryCapacityKwh(2.8)
-                .build();
-    }
-}
-```
-
-#### UML diagram: Factory Method
-```mermaid
-classDiagram
-    direction TB
-
-    class VehicleFactory {
-        <<interface>>
-        +createVehicle(String licensePlate) Vehicle
-    }
-
-    class ScooterFactory {
-        +createVehicle(String licensePlate) Vehicle
-    }
-
-    class PassengerCarFactory {
-        +createVehicle(String licensePlate) Vehicle
-    }
-
-    class CargoVanFactory {
-        +createVehicle(String licensePlate) Vehicle
-    }
-
-    class Vehicle {
-        -UUID id
-        -String licensePlate
-        -VehicleType type
-        -double maxSpeedKmh
-    }
-
-    VehicleFactory <|.. ScooterFactory
-    VehicleFactory <|.. PassengerCarFactory
-    VehicleFactory <|.. CargoVanFactory
-    VehicleFactory ..> Vehicle : creates
-```
-
----
-
-### B. Builder pattern
-
-#### Problem and rationale
-A `Vehicle` in ManaCar requires several configuration attributes: identifier, license plate, vehicle type, maximum governed speed, payload capacity, and battery kilowatt-hour capacity. Relying on telescoping constructors creates error-prone call sites, where adjacent numeric arguments (such as speed versus payload) can be accidentally transposed.
-
-#### Solution
-The `VehicleBuilder` class provides a fluent, step-by-step construction process. Invariants are validated prior to instantiation in `build()`, while the `Vehicle` constructor remains simple, private-friendly, and minimal:
+The `VehicleBuilder` class provides a fluent, step-by-step construction process. Invariants are validated prior to instantiation in `build()`, while the `Vehicle` constructor remains simple, encapsulated, and minimal:
 
 ```java
 package domain.models;
@@ -210,6 +138,60 @@ classDiagram
 
 ---
 
+### B. Prototype pattern
+
+#### Problem and rationale
+Fleet operators frequently register batches of vehicles belonging to identical commercial models (such as an order of identical courier vans). Manually re-specifying payload, dimensions, and battery ratings for dozens of units introduces human error and redundant logic.
+
+#### Solution
+The `Prototype<T>` interface establishes a cloning contract. The `Vehicle` class implements `cloneWithNewPlate()`, allowing existing template instances to produce deep duplicates equipped with a fresh unique identifier and distinct registration plate:
+
+```java
+package domain.models;
+
+public interface Prototype<T> {
+    T copy();
+}
+
+public final class Vehicle implements Prototype<Vehicle> {
+    // ...
+    @Override
+    public Vehicle copy() {
+        return new Vehicle(id, licensePlate, type, maxSpeedKmh, payloadCapacityKg, batteryCapacityKwh);
+    }
+
+    public Vehicle cloneWithNewPlate(UUID newId, String newPlate) {
+        return new Vehicle(newId, newPlate, type, maxSpeedKmh, payloadCapacityKg, batteryCapacityKwh);
+    }
+}
+```
+
+#### UML diagram: Prototype
+```mermaid
+classDiagram
+    direction TB
+
+    class Prototype~T~ {
+        <<interface>>
+        +copy() T
+    }
+
+    class Vehicle {
+        -UUID id
+        -String licensePlate
+        -VehicleType type
+        -double maxSpeedKmh
+        -double payloadCapacityKg
+        -double batteryCapacityKwh
+        +copy() Vehicle
+        +cloneWithNewPlate(UUID newId, String newPlate) Vehicle
+    }
+
+    Prototype <|.. Vehicle
+```
+
+---
+
 ### C. Singleton pattern
 
 #### Problem and rationale
@@ -275,63 +257,9 @@ classDiagram
 
 ---
 
-### D. Prototype pattern
-
-#### Problem and rationale
-Fleet operators frequently register batches of vehicles belonging to identical commercial models (such as an order of identical courier vans). Manually re-specifying payload, dimensions, and battery ratings for dozens of units introduces human error and redundant logic.
-
-#### Solution
-The `Prototype<T>` interface establishes a cloning contract. The `Vehicle` class implements `cloneWithNewPlate()`, allowing existing template instances to produce deep duplicates equipped with a fresh unique identifier and distinct registration plate:
-
-```java
-package domain.models;
-
-public interface Prototype<T> {
-    T copy();
-}
-
-public final class Vehicle implements Prototype<Vehicle> {
-    // ...
-    @Override
-    public Vehicle copy() {
-        return new Vehicle(id, licensePlate, type, maxSpeedKmh, payloadCapacityKg, batteryCapacityKwh);
-    }
-
-    public Vehicle cloneWithNewPlate(UUID newId, String newPlate) {
-        return new Vehicle(newId, newPlate, type, maxSpeedKmh, payloadCapacityKg, batteryCapacityKwh);
-    }
-}
-```
-
-#### UML diagram: Prototype
-```mermaid
-classDiagram
-    direction TB
-
-    class Prototype~T~ {
-        <<interface>>
-        +copy() T
-    }
-
-    class Vehicle {
-        -UUID id
-        -String licensePlate
-        -VehicleType type
-        -double maxSpeedKmh
-        -double payloadCapacityKg
-        -double batteryCapacityKwh
-        +copy() Vehicle
-        +cloneWithNewPlate(UUID newId, String newPlate) Vehicle
-    }
-
-    Prototype <|.. Vehicle
-```
-
----
-
 ## 4. Overall system architecture
 
-The interplay of all implemented patterns inside the domain architecture is illustrated below:
+The interplay of all three implemented creational patterns inside the domain architecture is illustrated below:
 
 ```mermaid
 classDiagram
@@ -343,13 +271,6 @@ classDiagram
         class VehicleType
         class TelemetryPing
         class Prototype~T~
-    }
-
-    namespace domain.factory {
-        class VehicleFactory
-        class ScooterFactory
-        class PassengerCarFactory
-        class CargoVanFactory
     }
 
     namespace domain.service {
@@ -364,13 +285,10 @@ classDiagram
         class InMemoryVehicleRepository
     }
 
-    VehicleFactory <|.. ScooterFactory
-    VehicleFactory <|.. PassengerCarFactory
-    VehicleFactory <|.. CargoVanFactory
-    VehicleFactory ..> VehicleBuilder : utilizes
     VehicleBuilder ..> Vehicle : builds
+    Vehicle ..> VehicleBuilder : creates via builder()
+    Prototype <|.. Vehicle : implements cloning
 
-    Prototype <|.. Vehicle
     VehicleRepository <|.. InMemoryVehicleRepository
     VehicleRepository o-- Vehicle
 
@@ -389,69 +307,87 @@ classDiagram
 
 ```text
 ManaCar Creational Design Patterns Demonstration
-Singleton config loaded: region=EU-MD-CHISINAU, speedTolerance=3.0 km/h
-
-1. Factory Method instantiation:
- - Created via ScooterFactory: SCOOTER [MD-SC-101] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: e29b7f99-2e66-44e1-9dbb-5157540d672f)
- - Created via CargoVanFactory: CARGO_VAN [MD-TR-900] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 7329fae1-de9d-455d-82df-fe4288d193a7)
+1. Singleton Pattern configuration: region=EU-MD-CHISINAU, speedTolerance=3.0 km/h, version=2.1.0-creational
 
 2. Builder Pattern instantiation:
- - Created via VehicleBuilder: PASSENGER_CAR [MD-EV-777] - maxSpeed: 150 km/h, payload: 420 kg, battery: 77.5 kWh (id: 5b4de728-eb95-40c1-9c5b-94458127a480)
+ - Constructed via VehicleBuilder: CARGO_VAN [MD-TR-900] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 74a24776-10d7-472b-95e0-da85e26132f6)
+ - Constructed via VehicleBuilder: PASSENGER_CAR [MD-EV-777] - maxSpeed: 150 km/h, payload: 420 kg, battery: 77.5 kWh (id: 2ad9c4d9-0e64-4d9b-9e86-47696758c9d0)
 
 3. Prototype Pattern instantiation:
- - Original template vehicle: CARGO_VAN [MD-TR-900] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 7329fae1-de9d-455d-82df-fe4288d193a7)
- - Cloned unit via Prototype: CARGO_VAN [MD-TR-901] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: e87c1cbf-6db8-4471-aedd-0df6a77f503c)
+ - Original template vehicle: CARGO_VAN [MD-TR-900] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 74a24776-10d7-472b-95e0-da85e26132f6)
+ - Cloned unit via Prototype: CARGO_VAN [MD-TR-901] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 56c5badc-dbda-44c1-8916-a53fdaa7c4f9)
 
 4. Telemetry Ingestion & Compliance Evaluation:
-Ingesting normal telemetry for scooter (speed: 22.0 km/h, max: 25.0 km/h):
+Ingesting normal telemetry for EV (speed: 120.0 km/h, max: 150.0 km/h):
 Status: telemetry ping recorded within normal parameters.
 Ingesting excessive speed telemetry for cargo van (speed: 98.5 km/h, max: 90.0 km/h):
-[alert] timestamp: 2026-10-23T13:31:35Z | coordinates: (47.0290, 28.8390) | speed: 98.5 km/h | reason: [CARGO_VAN - MD-TR-900] Speed limit exceeded (max allowed: 90.0 km/h)
+[alert] timestamp: 2026-10-23T14:06:52Z | coordinates: (47.0290, 28.8390) | speed: 98.5 km/h | reason: [CARGO_VAN - MD-TR-900] Speed limit exceeded (max allowed: 90.0 km/h)
 ```
 
 ### Interactive TUI session trace
 
 ```text
 ManaCar Fleet Telemetry Management
-1. Create vehicle using Factory Method
-2. Build custom vehicle using Builder
-3. Clone vehicle template using Prototype
-4. List registered fleet vehicles
-5. Ingest telemetry ping
-6. Remove vehicle
-7. Inspect system configuration (Singleton)
+1. Build custom vehicle (Builder)
+2. Clone vehicle from template (Prototype)
+3. List registered fleet vehicles
+4. Ingest telemetry ping
+5. Remove vehicle
+6. Inspect system configuration (Singleton)
 0. Exit
 > 1
-Select factory type (scooter / car / van): scooter
-Enter license plate: MD-TEST-01
-Registered via ScooterFactory: SCOOTER [MD-TEST-01] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 7a604b10-4f41-4964-8597-bc655043fea9)
+Enter license plate: MD-NEW-99
+Select type (SCOOTER / PASSENGER_CAR / CARGO_VAN): SCOOTER
+Enter max speed (km/h) [e.g. 110.0]: 28.0
+Enter payload capacity (kg) [e.g. 350.0]: 20.0
+Enter battery capacity (kWh) [e.g. 0.0]: 3.5
+Constructed via VehicleBuilder: SCOOTER [MD-NEW-99] - maxSpeed: 28 km/h, payload: 20 kg, battery: 3.5 kWh (id: 131bad5a-5e71-4c16-825f-2cd532a4edab)
 
 ManaCar Fleet Telemetry Management
-1. Create vehicle using Factory Method
-2. Build custom vehicle using Builder
-3. Clone vehicle template using Prototype
-4. List registered fleet vehicles
-5. Ingest telemetry ping
-6. Remove vehicle
-7. Inspect system configuration (Singleton)
+1. Build custom vehicle (Builder)
+2. Clone vehicle from template (Prototype)
+3. List registered fleet vehicles
+4. Ingest telemetry ping
+5. Remove vehicle
+6. Inspect system configuration (Singleton)
 0. Exit
-> 4
-Registered fleet vehicles (4 units):
- - CARGO_VAN [MD-TR-102] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: fa34e564-e31f-4845-8ff9-ded4ab007561)
- - PASSENGER_CAR [MD-PC-550] - maxSpeed: 130 km/h, payload: 450 kg, battery: 0.0 kWh (id: 154655d7-a126-40d4-b370-601f4d25fbc7)
- - SCOOTER [MD-SC-001] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 18c19850-18f7-42cc-a78d-8f96eff639f8)
- - SCOOTER [MD-TEST-01] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 7a604b10-4f41-4964-8597-bc655043fea9)
+> 2
+Available template vehicles:
+ 1. SCOOTER [MD-SC-001] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 5d1e3625-52db-43bb-a689-3a2a65b90130)
+ 2. PASSENGER_CAR [MD-PC-550] - maxSpeed: 130 km/h, payload: 450 kg, battery: 0.0 kWh (id: 1d526e98-9d95-407b-a51e-b8d77e00bddf)
+ 3. SCOOTER [MD-NEW-99] - maxSpeed: 28 km/h, payload: 20 kg, battery: 3.5 kWh (id: 131bad5a-5e71-4c16-825f-2cd532a4edab)
+ 4. CARGO_VAN [MD-TR-102] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 4ac821b8-174f-4b90-abfe-be99994e9e0f)
+Select index to clone: 1
+Enter new license plate: MD-CLONE-99
+Cloned via Prototype: SCOOTER [MD-CLONE-99] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 7fb128d3-1c00-4dd5-a16c-9ffb79b9b6c6)
+
+ManaCar Fleet Telemetry Management
+1. Build custom vehicle (Builder)
+2. Clone vehicle from template (Prototype)
+3. List registered fleet vehicles
+4. Ingest telemetry ping
+5. Remove vehicle
+6. Inspect system configuration (Singleton)
+0. Exit
+> 3
+Registered fleet vehicles (5 units):
+ - SCOOTER [MD-SC-001] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 5d1e3625-52db-43bb-a689-3a2a65b90130)
+ - PASSENGER_CAR [MD-PC-550] - maxSpeed: 130 km/h, payload: 450 kg, battery: 0.0 kWh (id: 1d526e98-9d95-407b-a51e-b8d77e00bddf)
+ - CARGO_VAN [MD-TR-102] - maxSpeed: 90 km/h, payload: 1800 kg, battery: 0.0 kWh (id: 4ac821b8-174f-4b90-abfe-be99994e9e0f)
+ - SCOOTER [MD-NEW-99] - maxSpeed: 28 km/h, payload: 20 kg, battery: 3.5 kWh (id: 131bad5a-5e71-4c16-825f-2cd532a4edab)
+ - SCOOTER [MD-CLONE-99] - maxSpeed: 25 km/h, payload: 15 kg, battery: 2.8 kWh (id: 7fb128d3-1c00-4dd5-a16c-9ffb79b9b6c6)
 ```
 
 ---
 
 ## 6. Conclusions
 
-In this laboratory work, the ManaCar telemetry management platform was advanced from its initial SOLID baseline into a fully decoupled creational architecture. By replacing ad-hoc constructor invocations with dedicated creational design patterns, the system achieved several architectural improvements:
+In this laboratory work, the ManaCar telemetry management platform was advanced from its initial SOLID baseline into a decoupled creational architecture focused on three practical patterns:
 
-1. **Factory Method** eliminated hardcoded vehicle parameters from consumer modules, isolating category defaults behind polymorphic factory implementations.
-2. **Builder** resolved the risks associated with parameter ordering and telescoping constructors, enabling step-by-step invariant validation before committing an immutable `Vehicle` to memory.
-3. **Singleton** (implemented via Bill Pugh's inner static holder) provided thread-safe, centralized configuration state across telemetry evaluation workers without mutable global variables or performance bottlenecks.
-4. **Prototype** established an efficient mechanism for cloning archetype vehicles, optimizing batch onboarding workflows within the fleet repository.
+1. **Builder** resolved the risks associated with parameter ordering and telescoping constructors, enabling step-by-step invariant validation before committing an immutable `Vehicle` to memory.
+2. **Prototype** established an efficient mechanism for cloning archetype vehicles, optimizing batch onboarding workflows within the fleet repository without redundant parameter declarations.
+3. **Singleton** (implemented via Bill Pugh's inner static holder) provided thread-safe, centralized configuration state across telemetry evaluation workers without mutable global variables or synchronization bottlenecks.
+
+A deliberate architectural decision was made to omit generic Factory hierarchies. In a focused domain model, introducing artificial factory interfaces creates boilerplate without functional necessity; combining Builder and Prototype delivers both parameter flexibility and rapid instantiation while keeping the codebase cohesive, minimal, and free of over-engineering.
 
 Strict adherence to object-oriented constraints—such as avoiding public attributes outside records, keeping constructors simple, and leveraging modern Java idioms (`var`, immutable records)—safeguarded the domain against antipatterns and AI boilerplate. The resulting architecture remains extensible, setting an organized foundation for Structural Design Patterns in Laboratory Work Nr. 2.

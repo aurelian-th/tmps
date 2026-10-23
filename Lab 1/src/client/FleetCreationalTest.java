@@ -1,8 +1,5 @@
 package client;
 
-import domain.factory.CargoVanFactory;
-import domain.factory.PassengerCarFactory;
-import domain.factory.ScooterFactory;
 import domain.models.TelemetryPing;
 import domain.models.Vehicle;
 import domain.models.VehicleType;
@@ -18,7 +15,6 @@ import java.util.UUID;
 public class FleetCreationalTest {
     public static void main(String[] args) {
         testSingleton();
-        testFactoryMethod();
         testBuilder();
         testPrototype();
         testTelemetryProcessing();
@@ -33,29 +29,6 @@ public class FleetCreationalTest {
         }
         if (instance1.speedToleranceKmh() < 0) {
             throw new AssertionError("Invalid speed tolerance in configuration");
-        }
-    }
-
-    private static void testFactoryMethod() {
-        var scooterFactory = new ScooterFactory();
-        var scooter = scooterFactory.createVehicle("MD-SC-77");
-        if (scooter.type() != VehicleType.SCOOTER) {
-            throw new AssertionError("ScooterFactory produced incorrect vehicle type");
-        }
-        if (scooter.maxSpeedKmh() != 25.0) {
-            throw new AssertionError("ScooterFactory configured incorrect max speed");
-        }
-
-        var carFactory = new PassengerCarFactory();
-        var car = carFactory.createVehicle("MD-PC-99");
-        if (car.type() != VehicleType.PASSENGER_CAR || car.maxSpeedKmh() != 130.0) {
-            throw new AssertionError("PassengerCarFactory configured incorrect specs");
-        }
-
-        var vanFactory = new CargoVanFactory();
-        var van = vanFactory.createVehicle("MD-VN-11");
-        if (van.type() != VehicleType.CARGO_VAN || van.payloadCapacityKg() != 1800.0) {
-            throw new AssertionError("CargoVanFactory configured incorrect specs");
         }
     }
 
@@ -74,10 +47,20 @@ public class FleetCreationalTest {
         if (vehicle.batteryCapacityKwh() != 82.0) {
             throw new AssertionError("Builder did not set battery capacity properly");
         }
+        if (vehicle.maxSpeedKmh() != 160.0) {
+            throw new AssertionError("Builder did not set max speed properly");
+        }
     }
 
     private static void testPrototype() {
-        var base = new CargoVanFactory().createVehicle("MD-TMPL-01");
+        var base = Vehicle.builder()
+                .licensePlate("MD-TMPL-01")
+                .type(VehicleType.CARGO_VAN)
+                .maxSpeedKmh(90.0)
+                .payloadCapacityKg(1800.0)
+                .batteryCapacityKwh(0.0)
+                .build();
+
         var cloneId = UUID.randomUUID();
         var cloned = base.cloneWithNewPlate(cloneId, "MD-TMPL-02");
 
@@ -97,7 +80,13 @@ public class FleetCreationalTest {
         var speedRule = new SpeedLimitRule(0.0);
         var trackingService = new FleetTrackingService(repository, (ping, msg) -> {}, List.of(speedRule));
 
-        var scooter = new ScooterFactory().createVehicle("MD-SC-10");
+        var scooter = Vehicle.builder()
+                .licensePlate("MD-SC-10")
+                .type(VehicleType.SCOOTER)
+                .maxSpeedKmh(25.0)
+                .payloadCapacityKg(15.0)
+                .batteryCapacityKwh(2.8)
+                .build();
         repository.registerVehicle(scooter);
 
         var okPing = new TelemetryPing(scooter.id(), 47.0, 28.0, 20.0, Instant.now());

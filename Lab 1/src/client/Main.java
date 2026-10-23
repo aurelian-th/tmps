@@ -1,8 +1,5 @@
 package client;
 
-import domain.factory.CargoVanFactory;
-import domain.factory.PassengerCarFactory;
-import domain.factory.ScooterFactory;
 import domain.models.TelemetryPing;
 import domain.models.Vehicle;
 import domain.models.VehicleType;
@@ -34,7 +31,7 @@ public class Main {
             return;
         }
 
-        // Pre-populate with typical fleet vehicles for immediate testing
+        // Pre-populate with typical fleet vehicles using Builder
         populateInitialFleet(repository);
 
         var scanner = new Scanner(System.in);
@@ -43,13 +40,33 @@ public class Main {
     }
 
     private static void populateInitialFleet(InMemoryVehicleRepository repository) {
-        var scooterFactory = new ScooterFactory();
-        var carFactory = new PassengerCarFactory();
-        var vanFactory = new CargoVanFactory();
+        var scooter = Vehicle.builder()
+                .licensePlate("MD-SC-001")
+                .type(VehicleType.SCOOTER)
+                .maxSpeedKmh(25.0)
+                .payloadCapacityKg(15.0)
+                .batteryCapacityKwh(2.8)
+                .build();
 
-        repository.registerVehicle(scooterFactory.createVehicle("MD-SC-001"));
-        repository.registerVehicle(carFactory.createVehicle("MD-PC-550"));
-        repository.registerVehicle(vanFactory.createVehicle("MD-TR-102"));
+        var car = Vehicle.builder()
+                .licensePlate("MD-PC-550")
+                .type(VehicleType.PASSENGER_CAR)
+                .maxSpeedKmh(130.0)
+                .payloadCapacityKg(450.0)
+                .batteryCapacityKwh(0.0)
+                .build();
+
+        var van = Vehicle.builder()
+                .licensePlate("MD-TR-102")
+                .type(VehicleType.CARGO_VAN)
+                .maxSpeedKmh(90.0)
+                .payloadCapacityKg(1800.0)
+                .batteryCapacityKwh(0.0)
+                .build();
+
+        repository.registerVehicle(scooter);
+        repository.registerVehicle(car);
+        repository.registerVehicle(van);
     }
 
     private static void runAutomatedDemonstration(
@@ -58,23 +75,21 @@ public class Main {
             FleetConfigManager config) {
 
         System.out.println("ManaCar Creational Design Patterns Demonstration");
-        System.out.printf("Singleton config loaded: region=%s, speedTolerance=%.1f km/h%n%n",
-                config.fleetRegion(), config.speedToleranceKmh());
 
-        // 1. Factory Method Demonstration
-        System.out.println("1. Factory Method instantiation:");
-        var scooterFactory = new ScooterFactory();
-        var vanFactory = new CargoVanFactory();
-
-        var scooter = scooterFactory.createVehicle("MD-SC-101");
-        var cargoVan = vanFactory.createVehicle("MD-TR-900");
-        repository.registerVehicle(scooter);
-        repository.registerVehicle(cargoVan);
-        System.out.println(" - Created via ScooterFactory: " + scooter);
-        System.out.println(" - Created via CargoVanFactory: " + cargoVan);
+        // 1. Singleton Pattern Demonstration
+        System.out.printf("1. Singleton Pattern configuration: region=%s, speedTolerance=%.1f km/h, version=%s%n",
+                config.fleetRegion(), config.speedToleranceKmh(), config.systemVersion());
 
         // 2. Builder Pattern Demonstration
         System.out.println("%n2. Builder Pattern instantiation:".formatted());
+        var deliveryVan = Vehicle.builder()
+                .licensePlate("MD-TR-900")
+                .type(VehicleType.CARGO_VAN)
+                .maxSpeedKmh(90.0)
+                .payloadCapacityKg(1800.0)
+                .batteryCapacityKwh(0.0)
+                .build();
+
         var customEv = Vehicle.builder()
                 .licensePlate("MD-EV-777")
                 .type(VehicleType.PASSENGER_CAR)
@@ -82,28 +97,31 @@ public class Main {
                 .payloadCapacityKg(420.0)
                 .batteryCapacityKwh(77.5)
                 .build();
+
+        repository.registerVehicle(deliveryVan);
         repository.registerVehicle(customEv);
-        System.out.println(" - Created via VehicleBuilder: " + customEv);
+        System.out.println(" - Constructed via VehicleBuilder: " + deliveryVan);
+        System.out.println(" - Constructed via VehicleBuilder: " + customEv);
 
         // 3. Prototype Pattern Demonstration
         System.out.println("%n3. Prototype Pattern instantiation:".formatted());
-        var clonedVan = cargoVan.cloneWithNewPlate(UUID.randomUUID(), "MD-TR-901");
+        var clonedVan = deliveryVan.cloneWithNewPlate(UUID.randomUUID(), "MD-TR-901");
         repository.registerVehicle(clonedVan);
-        System.out.println(" - Original template vehicle: " + cargoVan);
+        System.out.println(" - Original template vehicle: " + deliveryVan);
         System.out.println(" - Cloned unit via Prototype: " + clonedVan);
 
         // 4. Telemetry Processing & Rule Evaluation
         System.out.println("%n4. Telemetry Ingestion & Compliance Evaluation:".formatted());
         var now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-        var normalPing = new TelemetryPing(scooter.id(), 47.0245, 28.8322, 22.0, now);
-        System.out.println("Ingesting normal telemetry for scooter (speed: 22.0 km/h, max: 25.0 km/h):");
+        var normalPing = new TelemetryPing(customEv.id(), 47.0245, 28.8322, 120.0, now);
+        System.out.println("Ingesting normal telemetry for EV (speed: 120.0 km/h, max: 150.0 km/h):");
         var ok = service.processTelemetry(normalPing);
         if (ok) {
             System.out.println("Status: telemetry ping recorded within normal parameters.");
         }
 
-        var violationPing = new TelemetryPing(cargoVan.id(), 47.0290, 28.8390, 98.5, now);
+        var violationPing = new TelemetryPing(deliveryVan.id(), 47.0290, 28.8390, 98.5, now);
         System.out.println("Ingesting excessive speed telemetry for cargo van (speed: 98.5 km/h, max: 90.0 km/h):");
         service.processTelemetry(violationPing);
     }
