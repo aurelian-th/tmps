@@ -2,6 +2,7 @@ package client;
 
 import domain.models.TelemetryPing;
 import domain.models.Vehicle;
+import domain.models.VehicleBuilder;
 import domain.models.VehicleType;
 import domain.repository.VehicleRepository;
 import domain.service.FleetConfigManager;
@@ -59,37 +60,77 @@ public final class FleetConsoleTui {
         System.out.print("Enter license plate: ");
         if (!scanner.hasNextLine()) return;
         var plate = scanner.nextLine().strip();
-
-        System.out.print("Select type (SCOOTER / PASSENGER_CAR / CARGO_VAN): ");
-        if (!scanner.hasNextLine()) return;
-        var typeStr = scanner.nextLine().strip().toUpperCase();
-        VehicleType type;
-        try {
-            type = VehicleType.valueOf(typeStr);
-        } catch (IllegalArgumentException e) {
-            System.out.println("Invalid vehicle type. Defaulting to PASSENGER_CAR.");
-            type = VehicleType.PASSENGER_CAR;
+        if (plate.isBlank()) {
+            System.out.println("License plate cannot be blank.");
+            return;
         }
+
+        if (repository.findByLicensePlate(plate).isPresent()) {
+            System.out.printf("Vehicle with license plate '%s' is already registered.%n", plate);
+            return;
+        }
+
+        System.out.println("Select vehicle type:");
+        System.out.println(" 1. SCOOTER");
+        System.out.println(" 2. PASSENGER_CAR");
+        System.out.println(" 3. CARGO_VAN");
+        System.out.print("Choice [1-3 or name]: ");
+        if (!scanner.hasNextLine()) return;
+        var typeInput = scanner.nextLine().strip();
+        var type = parseVehicleType(typeInput);
 
         System.out.print("Enter max speed (km/h) [e.g. 110.0]: ");
         var speed = parseDoubleOrDefault(scanner, 110.0);
+        if (speed <= 0) {
+            System.out.println("Max speed must be strictly positive.");
+            return;
+        }
 
         System.out.print("Enter payload capacity (kg) [e.g. 350.0]: ");
         var payload = parseDoubleOrDefault(scanner, 350.0);
+        if (payload < 0) {
+            System.out.println("Payload capacity cannot be negative.");
+            return;
+        }
 
         System.out.print("Enter battery capacity (kWh) [e.g. 0.0]: ");
         var battery = parseDoubleOrDefault(scanner, 0.0);
+        if (battery < 0) {
+            System.out.println("Battery capacity cannot be negative.");
+            return;
+        }
 
-        var vehicle = Vehicle.builder()
-                .licensePlate(plate)
-                .type(type)
-                .maxSpeedKmh(speed)
-                .payloadCapacityKg(payload)
-                .batteryCapacityKwh(battery)
-                .build();
+        try {
+            var vehicle = Vehicle.builder()
+                    .licensePlate(plate)
+                    .type(type)
+                    .maxSpeedKmh(speed)
+                    .payloadCapacityKg(payload)
+                    .batteryCapacityKwh(battery)
+                    .build();
 
-        repository.registerVehicle(vehicle);
-        System.out.println("Constructed via VehicleBuilder: " + vehicle);
+            repository.registerVehicle(vehicle);
+            System.out.println("Constructed via VehicleBuilder: " + vehicle);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Failed to build vehicle: " + e.getMessage());
+        }
+    }
+
+    private VehicleType parseVehicleType(String input) {
+        if (input == null || input.isBlank()) {
+            System.out.println("Defaulting to PASSENGER_CAR.");
+            return VehicleType.PASSENGER_CAR;
+        }
+        var normalized = input.strip().toUpperCase();
+        return switch (normalized) {
+            case "1", "SCOOTER" -> VehicleType.SCOOTER;
+            case "2", "CAR", "PASSENGER_CAR", "PASSENGER CAR" -> VehicleType.PASSENGER_CAR;
+            case "3", "VAN", "CARGO_VAN", "CARGO VAN" -> VehicleType.CARGO_VAN;
+            default -> {
+                System.out.println("Unrecognized vehicle type. Defaulting to PASSENGER_CAR.");
+                yield VehicleType.PASSENGER_CAR;
+            }
+        };
     }
 
     private void handlePrototype(Scanner scanner) {
@@ -116,12 +157,22 @@ public final class FleetConsoleTui {
             System.out.print("Enter new license plate: ");
             if (!scanner.hasNextLine()) return;
             var newPlate = scanner.nextLine().strip();
+            if (newPlate.isBlank()) {
+                System.out.println("License plate cannot be blank.");
+                return;
+            }
+            if (repository.findByLicensePlate(newPlate).isPresent()) {
+                System.out.printf("Vehicle with license plate '%s' is already registered.%n", newPlate);
+                return;
+            }
 
             var clone = template.cloneWithNewPlate(UUID.randomUUID(), newPlate);
             repository.registerVehicle(clone);
             System.out.println("Cloned via Prototype: " + clone);
         } catch (NumberFormatException e) {
             System.out.println("Invalid number format.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Failed to clone vehicle: " + e.getMessage());
         }
     }
 
@@ -141,6 +192,10 @@ public final class FleetConsoleTui {
         System.out.print("Enter vehicle license plate: ");
         if (!scanner.hasNextLine()) return;
         var plate = scanner.nextLine().strip();
+        if (plate.isBlank()) {
+            System.out.println("License plate cannot be blank.");
+            return;
+        }
 
         var vehicleOpt = repository.findByLicensePlate(plate);
         if (vehicleOpt.isEmpty()) {
@@ -151,12 +206,20 @@ public final class FleetConsoleTui {
         var vehicle = vehicleOpt.get();
         System.out.print("Enter current speed (km/h): ");
         var speed = parseDoubleOrDefault(scanner, 50.0);
+        if (speed < 0) {
+            System.out.println("Speed cannot be negative.");
+            return;
+        }
 
-        var ping = new TelemetryPing(vehicle.id(), 47.0245, 28.8322, speed, Instant.now());
-        var compliant = trackingService.processTelemetry(ping);
-        if (compliant) {
-            System.out.printf("Telemetry compliant: %.1f km/h within allowed limit (%.1f km/h).%n",
-                    speed, vehicle.maxSpeedKmh());
+        try {
+            var ping = new TelemetryPing(vehicle.id(), 47.0245, 28.8322, speed, Instant.now());
+            var compliant = trackingService.processTelemetry(ping);
+            if (compliant) {
+                System.out.printf("Telemetry compliant: %.1f km/h within allowed limit (%.1f km/h).%n",
+                        speed, vehicle.maxSpeedKmh());
+            }
+        } catch (IllegalArgumentException e) {
+            System.out.println("Failed to process telemetry: " + e.getMessage());
         }
     }
 
@@ -164,6 +227,10 @@ public final class FleetConsoleTui {
         System.out.print("Enter license plate to remove: ");
         if (!scanner.hasNextLine()) return;
         var plate = scanner.nextLine().strip();
+        if (plate.isBlank()) {
+            System.out.println("License plate cannot be blank.");
+            return;
+        }
 
         var vehicleOpt = repository.findByLicensePlate(plate);
         if (vehicleOpt.isEmpty()) {
