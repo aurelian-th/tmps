@@ -252,7 +252,7 @@ classDiagram
         -FleetConfigManager INSTANCE$
     }
 
-    FleetConfigManager +-- Holder
+    FleetConfigManager *-- Holder : inner static class
 ```
 
 ---
